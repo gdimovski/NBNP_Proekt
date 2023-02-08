@@ -19,7 +19,7 @@ public class DataOperations {
 
     public static List<CSVRecord> getCsvRecords() {
         List<CSVRecord> csvRecords = new ArrayList<>();
-        String fileName = "src\\main\\java\\newSummary.csv";
+        String fileName = "D:\\gorazd\\Downloads\\newSummary.csv";
 
         try (FileReader reader = new FileReader(fileName)) {
             Iterable<CSVRecord> records = CSVFormat.EXCEL.withFirstRecordAsHeader().parse(reader);
