@@ -19,7 +19,7 @@ public class DataOperations {
 
     public static List<CSVRecord> getCsvRecords() {
         List<CSVRecord> csvRecords = new ArrayList<>();
-        String fileName = "D:\\gorazd\\Downloads\\newSummary.csv";
+        String fileName = "src\\main\\java\\newSummary.csv";
 
         try (FileReader reader = new FileReader(fileName)) {
             Iterable<CSVRecord> records = CSVFormat.EXCEL.withFirstRecordAsHeader().parse(reader);
@@ -55,7 +55,7 @@ public class DataOperations {
             put.addColumn(Bytes.toBytes("data"), Bytes.toBytes("PM2.5"), Bytes.toBytes(record.get("PM2.5")));
             table.put(put);
         }
-        // Clean up
+
         table.close();
         connection.close();
     }
