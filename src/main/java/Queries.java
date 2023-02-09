@@ -221,14 +221,14 @@ public class Queries {
         map.put("Time taken to execute the query 'Get all rows with values in a specified range in a single column and return only specific columns' is: " + duration + " milliseconds", Double.valueOf(count));
     }
 
-    public static void getPM_MeasurementsInDecember(Table table, HashMap<String,Double> map) throws IOException {
+    public static void getPM_MeasurementsInMonth(Table table, String month, HashMap<String,Double> map) throws IOException {
         long startTime = System.currentTimeMillis();
         Scan scan = new Scan();
         SingleColumnValueFilter filter = new SingleColumnValueFilter(
                 Bytes.toBytes("data"),
                 Bytes.toBytes("Measurement date"),
                 CompareFilter.CompareOp.EQUAL,
-                new RegexStringComparator("^*-12-*$")
+                new RegexStringComparator("^*-"+month+"-*$")
         );
         scan.setFilter(filter);
 
@@ -246,7 +246,7 @@ public class Queries {
         }
         long endTime = System.currentTimeMillis();
         long duration = endTime - startTime;
-        map.put("Time taken to execute the query 'PM measurements in december' is: " + duration + " milliseconds", 1d);
+        map.put("Time taken to execute the query 'PM measurements in "+month+" month' is: " + duration + " milliseconds", 1d);
     }
 
     public static void getTimeAndStationWithHighestAverageValueOfPollution(Table table, HashMap<String, Double> map) throws IOException {
@@ -401,7 +401,7 @@ public class Queries {
 
         getAllRowsWithValuesInASpecifiedRangeInASingleColumnAndReturnOnlySpecificColumns(table, "SO2", "0", "0.1", "date", "Station code", map);
 
-        getPM_MeasurementsInDecember(table, map);
+        getPM_MeasurementsInMonth(table, "12", map);
 
         getTimeAndStationWithHighestAverageValueOfPollution(table, map);
 
