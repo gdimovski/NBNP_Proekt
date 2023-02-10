@@ -10,16 +10,12 @@ import java.io.IOException;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Set;
+import java.util.*;
 
 public class Queries {
 
     public static void printResult(Result result){
         System.out.println("Result is ");
-        System.out.println("Row Key: " + Bytes.toString(result.getRow()));
         for (Cell cell : result.listCells()) {
             System.out.println(Bytes.toString(cell.getValueArray()));
         }
@@ -47,7 +43,7 @@ public class Queries {
         }
         long endTime = System.currentTimeMillis();
         long duration = endTime - startTime;
-        map.put("Time taken to execute the query 'Get get all rows in the table' is: " + duration + " milliseconds", Double.valueOf(counter));
+        map.put("Time taken to execute the query 'Get get all rows in the table' is: " + duration + " milliseconds", (double) counter);
     }
 
     public static void getAllRowsWithASpecificValueInAColumn(Table table, String column, String value, HashMap<String,Double> map) throws IOException {
@@ -62,10 +58,10 @@ public class Queries {
         }
         long endTime = System.currentTimeMillis();
         long duration = endTime - startTime;
-        map.put("Time taken to execute the query 'Get all rows with a specific value in a column' is: " + duration + " milliseconds", Double.valueOf(count));
+        map.put("Time taken to execute the query 'Get all rows with a specific value in a column' is: " + duration + " milliseconds", (double) count);
     }
 
-    public static void getAllRowsWithValuesInASpecifiedRangeInAColumn(Table table, String column, String lowerValue, String upperValue, HashMap<String,Double> map) throws IOException {
+    public static void getAllRowsWithValuesInASpecifiedRangeInAColumnAndOperator(Table table, String column, String lowerValue, String upperValue, HashMap<String,Double> map) throws IOException {
         long startTime = System.currentTimeMillis();
         Scan scan = new Scan();
         scan.setFilter(new SingleColumnValueFilter(Bytes.toBytes("data"), Bytes.toBytes(column), CompareFilter.CompareOp.GREATER_OR_EQUAL, Bytes.toBytes(lowerValue)));
@@ -78,7 +74,37 @@ public class Queries {
         }
         long endTime = System.currentTimeMillis();
         long duration = endTime - startTime;
-        map.put("Time taken to execute the query 'Get all rows with values in a specified range in a column' is: " + duration + " milliseconds", Double.valueOf(count));
+        map.put("Time taken to execute the query 'Get all rows with values in a specified range in a column and operator' is: " + duration + " milliseconds", (double) count);
+    }
+
+    public static void getAllRowsWithValuesInASpecifiedRangeInAColumnOrOperator(Table table, String column, String lowerValue, String upperValue, HashMap<String,Double> map) throws IOException {
+        long startTime = System.currentTimeMillis();
+        Scan scan = new Scan();
+        SingleColumnValueFilter coGreaterThan5 = new SingleColumnValueFilter(
+                Bytes.toBytes("data"),
+                Bytes.toBytes(column),
+                CompareFilter.CompareOp.GREATER,
+                Bytes.toBytes(upperValue)
+        );
+        SingleColumnValueFilter coLessThan0_5 = new SingleColumnValueFilter(
+                Bytes.toBytes("data"),
+                Bytes.toBytes(column),
+                CompareFilter.CompareOp.LESS,
+                Bytes.toBytes(lowerValue)
+        );
+        FilterList filterList = new FilterList(FilterList.Operator.MUST_PASS_ONE);
+        filterList.addFilter(coGreaterThan5);
+        filterList.addFilter(coLessThan0_5);
+        scan.setFilter(filterList);
+        ResultScanner scanner = table.getScanner(scan);
+        int count = 1;
+        for(Result r: scanner){
+            count++;
+            printResult(r);
+        }
+        long endTime = System.currentTimeMillis();
+        long duration = endTime - startTime;
+        map.put("Time taken to execute the query 'Get all rows with values in a specified range in a column or operator' is: " + duration + " milliseconds", (double) count);
     }
 
     public static void getAverageValueOfColumn(Table table, String column, HashMap<String,Double> map) throws IOException {
@@ -132,6 +158,44 @@ public class Queries {
         map.put("Time taken to execute the query 'Get the minimum value of a column' is: " + duration + " milliseconds", min);
     }
 
+    public static void getDistinctValuesOfColumnOrderedByAnotherColumn(Table table, String returnColumn, String orderColumn, HashMap<String, Double> map) throws IOException {
+        long startTime = System.currentTimeMillis();
+        Scan scan = new Scan();
+        scan.addColumn(Bytes.toBytes("data"), Bytes.toBytes(returnColumn));
+        scan.setCaching(1000);
+        Set<Double> returnValues = new TreeSet<>();
+        ResultScanner scanner = table.getScanner(scan);
+        for (Result result : scanner) {
+            double returns = Double.parseDouble(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes(returnColumn))));
+            returnValues.add(returns);
+        }
+        scanner.close();
+
+        NavigableMap<byte[], byte[]> orderValues = new TreeMap<>(Bytes.BYTES_COMPARATOR);
+        scan = new Scan();
+        scan.addColumn(Bytes.toBytes("data"), Bytes.toBytes(orderColumn));
+        scan.addColumn(Bytes.toBytes("data"), Bytes.toBytes(returnColumn));
+        scanner = table.getScanner(scan);
+        for (Result result : scanner) {
+            int stationCode = Integer.parseInt(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes(orderColumn))));
+            double latitude = Double.parseDouble(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes(returnColumn))));
+            if (returnValues.contains(latitude)) {
+                returnValues.remove(latitude);
+                orderValues.put(Bytes.toBytes(stationCode), Bytes.toBytes(latitude));
+            }
+        }
+        scanner.close();
+
+        for (Map.Entry<byte[], byte[]> entry : orderValues.entrySet()) {
+            int orders = Bytes.toInt(entry.getKey());
+            double returns = Bytes.toDouble(entry.getValue());
+            System.out.println(orderColumn+": " + orders + ", "+returnColumn+": " + returns);
+        }
+        long endTime = System.currentTimeMillis();
+        long duration = endTime - startTime;
+        map.put("Time taken to execute the query 'Get all distinct values of column ordered by another column' is: " + duration + " milliseconds", (double) orderValues.size());
+    }
+
     public static void getCountOfRowsWithSpecificValueInAColumn(Table table, String column, String value, HashMap<String,Double> map) throws IOException {
         long startTime = System.currentTimeMillis();
         Scan scan = new Scan();
@@ -144,7 +208,28 @@ public class Queries {
         System.out.println("Count of values measured at " + column + " " + value + " is "+ count);
         long endTime = System.currentTimeMillis();
         long duration = endTime - startTime;
-        map.put("Time taken to execute the query 'Get the count of rows with a specific value in a column' is: " + duration + " milliseconds", Double.valueOf(count));
+        map.put("Time taken to execute the query 'Get the count of rows with a specific value in a column' is: " + duration + " milliseconds", (double) count);
+    }
+
+    public static void getDistinctValuesOfColumnOrderedByAnotherColumnDescending(Table table, String returnColumn, String orderColumn, HashMap<String, Double> map) throws IOException {
+        long startTime = System.currentTimeMillis();
+        Scan scan = new Scan();
+        scan.setFilter(new FilterList(FilterList.Operator.MUST_PASS_ALL,
+                new SingleColumnValueFilter(Bytes.toBytes("data"), Bytes.toBytes(returnColumn), CompareFilter.CompareOp.NOT_EQUAL, (byte[]) null),
+                new SingleColumnValueFilter(Bytes.toBytes("data"), Bytes.toBytes(orderColumn), CompareFilter.CompareOp.NOT_EQUAL, (byte[]) null)));
+        scan.setReversed(true);
+
+        List<String> distinctReturns = new ArrayList<>();
+        ResultScanner results = table.getScanner(scan);
+        for (Result result : results) {
+            byte[] returns = result.getValue(Bytes.toBytes("data"), Bytes.toBytes(returnColumn));
+            if (!distinctReturns.contains(Bytes.toString(returns))) {
+                distinctReturns.add(Bytes.toString(returns));
+            }
+        }
+        long endTime = System.currentTimeMillis();
+        long duration = endTime - startTime;
+        map.put("Time taken to execute the query 'Get all distinct values of column ordered by another column descending is: " + duration + " milliseconds", (double) distinctReturns.size());
     }
 
     public static void getSumOfValuesInColumn(Table table, String column, HashMap<String,Double> map) throws IOException {
@@ -158,7 +243,7 @@ public class Queries {
         System.out.println("The sum of values of "+ column + " is " + sum);
         long endTime = System.currentTimeMillis();
         long duration = endTime - startTime;
-        map.put("Time taken to execute the query 'Get the sum of values in a column' is: " + duration + " milliseconds", Double.valueOf(sum));
+        map.put("Time taken to execute the query 'Get the sum of values in a column' is: " + duration + " milliseconds", sum);
     }
 
     public static void getAllRowsWithValuesInASpecifiedRangeInMultipleColumns(Table table, String firstColumn, String firstLowerValue, String firstUpperValue, String secondColumn, String secondLowerValue, String secondUpperValue, HashMap<String, Double> map) throws IOException {
@@ -178,7 +263,7 @@ public class Queries {
         }
         long endTime = System.currentTimeMillis();
         long duration = endTime - startTime;
-        map.put("Time taken to execute the query 'Get all rows with values in a specified range in multiple columns: " + duration + " milliseconds", Double.valueOf(count));
+        map.put("Time taken to execute the query 'Get all rows with values in a specified range in multiple columns: " + duration + " milliseconds", (double) count);
     }
 
     public static void getAllRowsWithValuesInASpecifiedRangeInMultipleColumnsAndExcludeRowsWithSpecificValueInAnotherColumn(Table table, String firstColumn, String firstLowerValue, String firstUpperValue, String secondColumn, String secondLowerValue, String secondUpperValue, String excludeColumn, String excludeValue, HashMap<String, Double> map) throws IOException
@@ -200,7 +285,7 @@ public class Queries {
         }
         long endTime = System.currentTimeMillis();
         long duration = endTime - startTime;
-        map.put("Time taken to execute the query 'Get all rows with values in a specified range in multiple columns and exclude rows with a specific value in another column' is: " + duration + " milliseconds", Double.valueOf(count));
+        map.put("Time taken to execute the query 'Get all rows with values in a specified range in multiple columns and exclude rows with a specific value in another column' is: " + duration + " milliseconds", (double) count);
     }
 
     public static void getAllRowsWithValuesInASpecifiedRangeInASingleColumnAndReturnOnlySpecificColumns(Table table, String column, String lowerValue, String upperValue, String firstSelectColumn, String secondSelectColumn, HashMap<String,Double> map) throws IOException {
@@ -218,7 +303,7 @@ public class Queries {
         }
         long endTime = System.currentTimeMillis();
         long duration = endTime - startTime;
-        map.put("Time taken to execute the query 'Get all rows with values in a specified range in a single column and return only specific columns' is: " + duration + " milliseconds", Double.valueOf(count));
+        map.put("Time taken to execute the query 'Get all rows with values in a specified range in a single column and return only specific columns' is: " + duration + " milliseconds", (double) count);
     }
 
     public static void getPM_MeasurementsInMonth(Table table, String month, HashMap<String,Double> map) throws IOException {
@@ -268,13 +353,13 @@ public class Queries {
 
         for (Result result : resultScanner) {
             String currentDate = Bytes.toString(result.getRow());
-            int currentStationCode = Integer.valueOf(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("Station code"))));
-            float so2 = Float.valueOf(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("SO2"))));
-            float no2 = Float.valueOf(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("NO2"))));
-            float co = Float.valueOf(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("CO"))));
-            float o3 = Float.valueOf(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("O3"))));
-            float pm10 = Float.valueOf(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("PM10"))));
-            float pm25 = Float.valueOf(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("PM2.5"))));
+            int currentStationCode = Integer.parseInt(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("Station code"))));
+            float so2 = Float.parseFloat(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("SO2"))));
+            float no2 = Float.parseFloat(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("NO2"))));
+            float co = Float.parseFloat(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("CO"))));
+            float o3 = Float.parseFloat(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("O3"))));
+            float pm10 = Float.parseFloat(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("PM10"))));
+            float pm25 = Float.parseFloat(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("PM2.5"))));
 
             float avg = (so2 + no2 + co + o3 + pm10 + pm25) / 6;
             if (avg > maxAvg) {
@@ -285,7 +370,7 @@ public class Queries {
         }
         long endTime = System.currentTimeMillis();
         long duration = endTime - startTime;
-        map.put("Time taken to execute the query 'Get station with highest average value of pollution' is: " + duration + " milliseconds and date is: "+date, Double.valueOf(stationCode));
+        map.put("Time taken to execute the query 'Get station with highest average value of pollution' is: " + duration + " milliseconds and date is: "+date, (double) stationCode);
     }
 
     public static void getTimeAndStationWithLowestAverageValueOfPollution(Table table, HashMap<String, Double> map) throws IOException {
@@ -307,13 +392,13 @@ public class Queries {
 
         for (Result result : resultScanner) {
             String currentDate = Bytes.toString(result.getRow());
-            int currentStationCode = Integer.valueOf(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("Station code"))));
-            float so2 = Float.valueOf(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("SO2"))));
-            float no2 = Float.valueOf(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("NO2"))));
-            float co = Float.valueOf(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("CO"))));
-            float o3 = Float.valueOf(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("O3"))));
-            float pm10 = Float.valueOf(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("PM10"))));
-            float pm25 = Float.valueOf(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("PM2.5"))));
+            int currentStationCode = Integer.parseInt(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("Station code"))));
+            float so2 = Float.parseFloat(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("SO2"))));
+            float no2 = Float.parseFloat(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("NO2"))));
+            float co = Float.parseFloat(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("CO"))));
+            float o3 = Float.parseFloat(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("O3"))));
+            float pm10 = Float.parseFloat(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("PM10"))));
+            float pm25 = Float.parseFloat(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("PM2.5"))));
 
             float avg = (so2 + no2 + co + o3 + pm10 + pm25) / 6;
             if (avg < minAvg) {
@@ -324,7 +409,7 @@ public class Queries {
         }
         long endTime = System.currentTimeMillis();
         long duration = endTime - startTime;
-        map.put("Time taken to execute the query 'Get station with lowest average value of pollution' is: " + duration + " milliseconds and date is: "+date, Double.valueOf(stationCode));
+        map.put("Time taken to execute the query 'Get station with lowest average value of pollution' is: " + duration + " milliseconds and date is: "+date, (double) stationCode);
     }
 
     public static void getMonthWithHighestAveragePollution(Table table, HashMap<String,Double> map) throws IOException, ParseException {
@@ -340,12 +425,12 @@ public class Queries {
             Calendar calendar = Calendar.getInstance();
             calendar.setTime(measurementDate);
             String month = new SimpleDateFormat("MMMM").format(calendar.getTime());
-            float so2 = Float.valueOf(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("SO2"))));
-            float no2 = Float.valueOf(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("NO2"))));
-            float co = Float.valueOf(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("CO"))));
-            float o3 = Float.valueOf(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("O3"))));
-            float pm10 = Float.valueOf(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("PM10"))));
-            float pm25 = Float.valueOf(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("PM2.5"))));
+            float so2 = Float.parseFloat(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("SO2"))));
+            float no2 = Float.parseFloat(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("NO2"))));
+            float co = Float.parseFloat(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("CO"))));
+            float o3 = Float.parseFloat(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("O3"))));
+            float pm10 = Float.parseFloat(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("PM10"))));
+            float pm25 = Float.parseFloat(Bytes.toString(result.getValue(Bytes.toBytes("data"), Bytes.toBytes("PM2.5"))));
             float avgPollution = (so2 + no2 + co + o3 + pm10 + pm25) / 6;
             if (!avgPollutionPerMonth.containsKey(month)) {
                 avgPollutionPerMonth.put(month, avgPollution);
@@ -366,7 +451,7 @@ public class Queries {
         }
         long endTime = System.currentTimeMillis();
         long duration = endTime - startTime;
-        map.put("Time taken to execute the query 'Get month with highest average pollution' is: " + duration + " milliseconds is month:"+monthWithHighestAvgPollution, Double.valueOf(maxAvgPollution));
+        map.put("Time taken to execute the query 'Get month with highest average pollution' is: " + duration + " milliseconds is month:"+monthWithHighestAvgPollution, maxAvgPollution);
     }
 
 
@@ -383,7 +468,9 @@ public class Queries {
 
         getAllRowsWithASpecificValueInAColumn(table, "Station code", "125", map);
 
-        getAllRowsWithValuesInASpecifiedRangeInAColumn(table, "SO2", "0", "0,1", map);
+        getAllRowsWithValuesInASpecifiedRangeInAColumnAndOperator(table, "SO2", "0", "0.1", map);
+
+        getAllRowsWithValuesInASpecifiedRangeInAColumnOrOperator(table, "CO", "0.5", "5", map);
 
         getAverageValueOfColumn(table, "SO2", map);
 
@@ -391,7 +478,11 @@ public class Queries {
 
         getMinimumValueOfAColumn(table, "SO2", map);
 
+        getDistinctValuesOfColumnOrderedByAnotherColumn(table, "Latitude",  "Station code",  map);
+
         getCountOfRowsWithSpecificValueInAColumn(table, "SO2", "125", map);
+
+        getDistinctValuesOfColumnOrderedByAnotherColumnDescending(table, "Latitude",  "Station code",  map);
 
         getSumOfValuesInColumn(table, "SO2", map);
 
